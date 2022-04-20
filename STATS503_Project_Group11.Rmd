@@ -1,0 +1,696 @@
+---
+title: "STAT 503 Project, Group 11"
+author: "Enzhi Zhang, Aayushi Sinha, Tianyi Xu"
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document:
+    df_print: paged
+---
+```{r}
+suppressMessages(library(dplyr))
+suppressMessages(library(grid))
+suppressMessages(library(gridExtra))
+suppressMessages(library(caret))
+suppressMessages(library(tidyverse))
+suppressMessages(library(gbm))
+suppressMessages(library(ggpubr))
+suppressMessages(library(ggmosaic))
+suppressMessages(library(GGally))
+suppressMessages(library(randomForest))
+```
+
+```{r}
+attrition_dat <- read.csv("IBM.csv")
+head(attrition_dat)
+```
+
+```{r}
+#train test split
+set.seed(0)
+samp <- sample(nrow(attrition_dat), 0.8 * nrow(attrition_dat))
+attrition_train <- attrition_dat[samp, ]
+attrition_test <- attrition_dat[-samp, ]
+```
+
+
+# EDA
+
+```{r}
+summary(attrition_train)
+```
+
+```{r}
+str(attrition_dat)
+```
+```{r}
+prop.table(table(attrition_dat$Attrition))
+```
+
+```{r}
+
+plt1 <- ggboxplot(attrition_train, x = "Attrition", y = "Age", 
+                  color = "Attrition", palette = c("black", "lightcyan4"))+
+  ggtitle('Age w.r.t. Attrition') +
+  theme(plot.title = element_text(size = 8))
+
+plt2 <- ggboxplot(attrition_train, x = "Attrition", y = "DistanceFromHome", 
+                  color = "Attrition", palette = c("black", "lightcyan4"))+
+  ggtitle('Distance From Home w.r.t. Attrition') + 
+  theme(plot.title = element_text(size = 8))
+
+plt3 <- ggboxplot(attrition_train, x = "Attrition", y = "Education", 
+                  color = "Attrition", palette = c("black", "lightcyan4"))+
+  ggtitle('Education w.r.t. Attrition') + 
+  theme(plot.title = element_text(size = 8))
+
+plt4 <- ggboxplot(attrition_train, x = "Attrition", y = "EnvironmentSatisfaction", 
+                  color = "Attrition", palette = c("black", "lightcyan4"))+
+  ggtitle('Environment Satisfaction w.r.t. Attrition') + 
+  theme(plot.title = element_text(size = 8))
+
+plt5 <- ggboxplot(attrition_train, x = "Attrition", y = "JobSatisfaction", 
+                  color = "Attrition", palette = c("black", "lightcyan4"))+
+  ggtitle('Job Satisfaction w.r.t. Attrition') + 
+  theme(plot.title = element_text(size = 8))
+
+plt6 <- ggboxplot(attrition_train, x = "Attrition", y = "MonthlyIncome", 
+                  color = "Attrition", palette = c("black", "lightcyan4"))+ 
+  ggtitle('Monthly Income w.r.t. Attrition') + 
+  theme(plot.title = element_text(size = 8))
+
+plt7 <- ggboxplot(attrition_train, x = "Attrition", y = "NumCompaniesWorked", 
+                  color = "Attrition", palette = c("black", "lightcyan4"))+
+  ggtitle('Number of Companies Worked w.r.t. Attrition') + 
+  theme(plot.title = element_text(size = 8))
+
+plt8 <- ggboxplot(attrition_train, x = "Attrition", y = "WorkLifeBalance", 
+                  color = "Attrition", palette = c("black", "lightcyan4"))+
+  ggtitle('Work Life Balance w.r.t. Attrition') + 
+  theme(plot.title = element_text(size = 8))
+
+plt9 <- ggboxplot(attrition_train, x = "Attrition", y = "YearsAtCompany", 
+                  color = "Attrition", palette = c("black", "lightcyan4"))+
+  ggtitle('Years At Company w.r.t. Attrition') + 
+  theme(plot.title = element_text(size = 8))
+```
+
+```{r, fig.height = 2.5, fig.width = 4.5, fig.align='center'}
+ggarrange(plt1, plt2, plt3, ncol=3, nrow = 1, common.legend=T, legend="bottom")
+```
+```{r, fig.height = 2.5, fig.width = 4.5, fig.align='center'}
+ggarrange(plt4, plt5, plt6, ncol=3, nrow = 1, common.legend=T, legend="bottom")
+```
+
+```{r, fig.height = 2.5, fig.width = 4.5, fig.align='center'}
+ggarrange(plt7, plt8, plt9, ncol=3, nrow = 1, common.legend=T, legend="bottom")
+```
+
+```{r warning=FALSE}
+plt1 <- ggplot(data = attrition_train,) +
+  geom_mosaic(aes(x = product(Attrition, Department), fill=Attrition)) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.5, vjust = 0.5)) +
+  scale_fill_manual(values = c("black", "lightcyan4"))+
+  labs(title='Attrtion vs Department')
+
+plt2 <- ggplot(data = attrition_train,) +
+  geom_mosaic(aes(x = product(Attrition, EducationField), fill=Attrition)) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.5, vjust = 0.5)) +
+  scale_fill_manual(values = c("black", "lightcyan4"))+
+  labs(title='Attrtion vs Education Field')
+
+plt3 <- ggplot(data = attrition_train,) +
+  geom_mosaic(aes(x = product(Attrition, MaritalStatus), fill=Attrition)) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.5, vjust = 0.5)) +
+  scale_fill_manual(values = c("black", "lightcyan4"))+
+  labs(title='Attrtion vs Marital Status')
+```
+
+```{r, fig.height = 2.5, fig.width = 4.5, fig.align='center', warning=FALSE}
+ggarrange(plt1, plt2, plt3, ncol=3, nrow = 1, common.legend=T, legend="bottom")
+```
+
+```{r, fig.height = 2.5, fig.width = 4.5, fig.align='center'}
+ggpairs(attrition_train,
+        columns = c(1, 4, 7, 8, 10, 11, 12, 13), 
+        lower = list(continuous = wrap("points", alpha = .75, size = .5),
+                     mapping=aes(color=Attrition)),
+        diag = list(continuous = wrap("densityDiag", alpha = .5),
+                     mapping=aes(fill=Attrition)),
+        upper = list(continuous = wrap("cor", size = 3),
+                     mapping=aes(color=Attrition)),
+        title = "Pair Plot of Attrtion Data",
+        legend = 1) + theme_bw() +
+        scale_color_manual(values=c("black", "lightcyan4"))+
+        scale_fill_manual(values = c("black", "lightcyan4"))+
+        theme(plot.title = element_text(size = 12, hjust = 0.5))
+```
+
+
+```{r}
+cor((attrition_dat[,c(1,4,7,8,10,11,12,13)]))
+```
+
+
+# Model
+
+## logistic
+
+Splitting the data into training and testing for logistic regression.
+```{r}
+set.seed(0)
+samp <- sample(nrow(attrition_dat), 0.8 * nrow(attrition_dat))
+attrition_train <- attrition_dat[samp, ]
+attrition_test <- attrition_dat[-samp, ]
+```
+
+Running the first model, using all the predictors and the training dataset.
+```{r}
+mod_log  <-  glm(as.factor(Attrition) ~ . , data = attrition_train, family = binomial())
+summary(mod_log)
+```
+
+We can see from the summary that this initial model has a few significant parameters, however the overall model could be improved. 
+
+Let us do the model prediction.
+
+```{r}
+#Changing the attrition values to Yes and No.
+train_pred <- ifelse(predict(mod_log, type = "response") > 0.5, "Yes", "No")
+test_pred <- ifelse(predict(mod_log, newdata = attrition_test, type = "response") > 0.5, "Yes", "No")
+```
+
+```{r}
+# Making predictions on the train set.
+train_table <- table(predicted = train_pred, actual = attrition_train$Attrition)
+train_table
+
+# Making predictions on the test set.
+test_table <- table(predicted = test_pred, actual = attrition_test$Attrition)
+test_table
+
+```
+
+Let us now evaluated the model.
+
+```{r}
+calc_error <- function(actual, predicted) {
+  mean(actual != predicted)
+}
+sprintf("This is the overall train error: %f", calc_error(actual = attrition_train$Attrition, predicted = train_pred) )
+
+train_yes_error = mean(train_pred[attrition_train$Attrition =='Yes']!=
+                        attrition_train$Attrition[attrition_train$Attrition =='Yes'])
+sprintf('Train error for Yes group is: %f', train_yes_error)
+
+sprintf("This is the overall test error: %f", calc_error(actual = attrition_test$Attrition, predicted = test_pred) )
+
+test_yes_error = mean(test_pred[attrition_test$Attrition =='Yes']!=
+                        attrition_test$Attrition[attrition_test$Attrition =='Yes'])
+sprintf('Test error for Yes group is: %f', test_yes_error)
+```
+
+Clearly the yes class error is more than the overall error. Most of the observations are getting 
+classified as No due to class imbalance. 
+
+Let's try a model using the significant parameters to see if that changes anything.
+
+```{r}
+## Removing some variables
+mod_log2  <-  glm(as.factor(Attrition) ~ Age + DistanceFromHome +  
+                    EnvironmentSatisfaction + JobSatisfaction + 
+                    MonthlyIncome + NumCompaniesWorked + WorkLifeBalance , data = attrition_train, family = binomial)
+
+```
+
+```{r}
+#Changing the attrition values to Yes and No.
+train_pred2 <- ifelse(predict(mod_log2, type = "response") > 0.5, "Yes", "No")
+test_pred2<- ifelse(predict(mod_log2, newdata = attrition_test, type = "response") > 0.5, "Yes", "No")
+```
+
+```{r}
+# Making predictions on the train set.
+train_table2 <- table(predicted = train_pred2, actual = attrition_train$Attrition)
+train_table2
+
+# Making predictions on the test set.
+test_table2 <- table(predicted = test_pred2, actual = attrition_test$Attrition)
+test_table
+
+```
+Clearly this new model did not change the predictions much. In fact, the training error got worst.
+
+Let's try another model using a sub sampled dataset.
+
+```{r}
+set.seed(42)
+traindown <- downSample(x=attrition_train%>%ungroup(),
+                  y=as.factor(attrition_train$Attrition))
+traindown <- traindown %>% select(,-c("Class"))
+```
+
+```{r}
+mod_log_downsampled  <-  glm(as.factor(Attrition) ~ . , data=traindown, family = binomial)
+summary(mod_log_downsampled)
+```
+Let us do the model prediction.
+
+```{r}
+#Changing the attrition values to Yes and No.
+train_pred_ds <- ifelse(predict(mod_log_downsampled, type = "response") > 0.5, "Yes", "No")
+test_pred_ds <- ifelse(predict(mod_log_downsampled, newdata = attrition_test, type = "response") > 0.5, "Yes", "No")
+```
+
+```{r}
+# Making predictions on the train set.
+train_table_ds <- table(predicted = train_pred_ds, actual = traindown$Attrition)
+train_table_ds
+
+# Making predictions on the test set.
+test_table_ds <- table(predicted = test_pred_ds, actual = attrition_test$Attrition)
+test_table_ds
+
+```
+
+Let us now evaluated the model.
+
+```{r}
+calc_error <- function(actual, predicted) {
+  mean(actual != predicted)
+}
+sprintf("This is the overall train error: %f", calc_error(actual = traindown$Attrition, predicted = train_pred_ds) )
+
+train_yes_error = mean(train_pred_ds[traindown$Attrition =='Yes']!=
+                        traindown$Attrition[traindown$Attrition =='Yes'])
+sprintf('Train error for Yes group is: %f', train_yes_error)
+
+sprintf("This is the overall test error: %f", calc_error(actual = attrition_test$Attrition, predicted = test_pred_ds) )
+
+test_yes_error = mean(test_pred_ds[attrition_test$Attrition =='Yes']!=
+                        attrition_test$Attrition[attrition_test$Attrition =='Yes'])
+sprintf('Test error for Yes group is: %f', test_yes_error)
+```
+
+We can see that downsampling drastically improved the mis classification error. This is good. But to further improve our logistic regression model, we will try another sub-sample dataset. 
+
+```{r}
+yes_dat <- attrition_dat[attrition_dat$Attrition == "Yes",]
+no_dat <- attrition_dat[attrition_dat$Attrition == "No",]
+
+samp_yes <- sample(nrow(yes_dat), 0.8 * nrow(yes_dat))
+yes_train <- yes_dat[samp_yes, ]
+yes_test <- yes_dat[-samp_yes, ]
+
+samp_no <- sample(nrow(no_dat), 0.15 * nrow(no_dat))
+no_train <- no_dat[samp_no, ]
+no_test <- no_dat[-samp_no, ]
+
+balanced_train <- rbind(yes_train, no_train)
+balanced_test <- rbind(yes_test, no_test)
+```
+
+```{r}
+mod_log_subsampled  <-  glm(as.factor(Attrition) ~ . , data=balanced_train, family = binomial)
+summary(mod_log_subsampled)
+```
+```{r}
+#Changing the attrition values to Yes and No.
+train_pred_ss <- ifelse(predict(mod_log_subsampled, type = "response") > 0.5, "Yes", "No")
+test_pred_ss <- ifelse(predict(mod_log_subsampled, newdata = balanced_test, type = "response") > 0.5, "Yes", "No")
+```
+
+```{r}
+# Making predictions on the train set.
+train_table_ss <- table(predicted = train_pred_ss, actual = balanced_train$Attrition)
+train_table_ss
+
+# Making predictions on the test set.
+test_table_ss <- table(predicted = test_pred_ss, actual = balanced_test$Attrition)
+test_table_ss
+
+```
+
+```{r}
+calc_error <- function(actual, predicted) {
+  mean(actual != predicted)
+}
+sprintf("This is the overall train error: %f", calc_error(actual = balanced_train$Attrition, predicted = train_pred_ss) )
+
+train_yes_error = mean(train_pred_ss[balanced_train$Attrition =='Yes']!=
+                        balanced_train$Attrition[balanced_train$Attrition =='Yes'])
+sprintf('Train error for Yes group is: %f', train_yes_error)
+
+sprintf("This is the overall test error: %f", calc_error(actual = balanced_test$Attrition, predicted = test_pred_ss) )
+
+test_yes_error = mean(test_pred_ss[balanced_test$Attrition =='Yes']!=
+                        balanced_test$Attrition[balanced_test$Attrition =='Yes'])
+sprintf('Test error for Yes group is: %f', test_yes_error)
+```
+
+Clearly the subsampling is performing the best.
+
+
+## Random Forest
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+set.seed(0)
+
+yes_dat <- attrition_dat[attrition_dat$Attrition == "Yes",]
+no_dat <- attrition_dat[attrition_dat$Attrition == "No",]
+
+samp_yes <- sample(nrow(yes_dat), 0.8 * nrow(yes_dat))
+yes_train <- yes_dat[samp_yes, ]
+yes_test <- yes_dat[-samp_yes, ]
+
+samp_no <- sample(nrow(no_dat), 0.15 * nrow(no_dat))
+no_train <- no_dat[samp_no, ]
+no_test <- no_dat[-samp_no, ]
+
+attrition_train <- rbind(yes_train, no_train)
+attrition_test <- rbind(yes_test, no_test)
+#yes_train
+#no_train
+#samp <- sample(nrow(attrition_dat), 0.8 * nrow(attrition_dat))
+#attrition_train <- attrition_dat[samp, ]
+#attrition_test <- attrition_dat[-samp, ]
+```
+
+To find the best random forest model, we compare the overall test error for different value of mtry, ntree and nodesize.
+
+```{r}
+attrition_train$Attrition <- factor(attrition_train$Attrition)
+attrition_test$Attrition <- factor(attrition_test$Attrition)
+mtrylist <- c(3, 4, 5)
+ntreelist = c(100, 300, 1000)
+nodesizelist = c(1, 2, 3, 4, 5)
+#comp_para = matrix(nrow=45,ncol=4)
+#start = 1
+comp_forests <- function(mtrylist, ntreelist, nodesizelist){
+  i1 = 0
+  j1 = 0
+  k1 = 0
+  best_error = 1
+  for (i in mtrylist){
+    for (j in ntreelist){
+      for (k in nodesizelist){
+        set.seed(0)
+        rf1 = randomForest(Attrition ~ ., data = attrition_train, mtry = i, 
+                   ntree = j,nodesize = k, importance = TRUE)
+        test.pred=predict(rf1, attrition_test, type="class")
+        test_error = sum(test.pred !=   attrition_test$Attrition)/dim(attrition_test)[1]
+        if (test_error < best_error){
+          i1 = i
+          j1 = j
+          k1 = k
+          best_error = test_error
+        }
+        #comp_para[start] = c(i,j,k,sum(test.pred !=   attrition_test$Attrition) /dim(attrition_test)[1])
+        #comp_para[start][1] = i
+        #comp_para[start][2] = j
+        #comp_para[start][3] = k
+        #comp_para[start][4] = sum(test.pred !=   attrition_test$Attrition) /dim(attrition_test)[1]
+        #comp_para[start] = c(i,j,k,sum(test.pred !=   attrition_test$Attrition) /dim(attrition_test)[1])
+        #start = start + 1
+        #print(sprintf('overall test error for mtry = %d, ntree = %d, nodesize = %d is %f', i, j, k, sum(test.pred !=   attrition_test$Attrition) 
+#                                                    / #dim(attrition_test)[1]))
+      }
+    }
+  }
+  print(sprintf('The best model is when mtry = %d, ntree = %d, nodesize = %d, the overall test error is %f', i1, j1, k1, best_error) )
+                                }
+comp_forests(mtrylist, ntreelist, nodesizelist)
+
+```
+
+According to the result, the best random forest model is when mtry = 3, ntree = 300 and nodesize = 5. Then we do more exploration of this model. We look at the importance of each variable.
+
+```{r}
+set.seed(0)
+rf1 = randomForest(Attrition ~ ., data = attrition_train, mtry = 4, 
+                   ntree = 100,nodesize = 1, importance = TRUE)
+
+importance(rf1)
+```
+According to the MeanDecreaseGini and MeanDecreaseAccuracy, we find that the three variables "Department", "Education", "EducationField" and "WorkLifeBalance" have low importance, so we test the model without this three variables.
+
+```{r}
+set.seed(0)
+rf2 = randomForest(Attrition ~ .-Department-Education-EducationField-WorkLifeBalance, data = attrition_train, mtry = 3, 
+                   ntree = 300,nodesize = 5, importance = TRUE)
+test.pred=predict(rf2, attrition_test, type="class")
+sprintf('overall test error is %f', sum(test.pred != attrition_test$Attrition) 
+                                                    / dim(attrition_test)[1])
+```
+
+We can see that the the test error of the new model is higher than the previous one, so we prefer the previous model. We will use all other parameters for the random forest model to predict the value of 'attribution' and we choose mtry = 3, ntree = 300 and nodesize = 5.
+Let's look at this model for more details.
+
+```{r}
+
+train.pred=predict(rf1, attrition_train, type="class")
+trainresult = table(train.pred, attrition_train$Attrition)
+trainresult
+sprintf('training error for yes class is %f', trainresult[3] / (trainresult[3] 
+                                                               + trainresult[4]))
+sprintf('training error for no class is %f', trainresult[2] / (trainresult[1] 
+                                                                + trainresult[2]))
+sprintf('overall training error is %f', sum(train.pred != attrition_train$Attrition) 
+                                                          / dim(attrition_train)[1])
+
+test.pred=predict(rf1, attrition_test, type="class")
+testresult = table(test.pred, attrition_test$Attrition)
+testresult
+sprintf('test error for yes class is %f', testresult[3] / (testresult[3] 
+                                                          + testresult[4]))
+sprintf('test error for no class is %f', testresult[2] / (testresult[1] 
+                                                           + testresult[2]))
+sprintf('overall test error is %f', sum(test.pred != attrition_test$Attrition) 
+                                                    / dim(attrition_test)[1])
+```
+
+We can find that the performance of this model works very well for the training data. And for the test error, this model has a balanced performance for 'no' class and 'yes' class.
+
+
+
+## Adaboost
+
+```{r}
+set.seed(0)
+yes_dat <- attrition_dat[attrition_dat$Attrition == "Yes",]
+no_dat <- attrition_dat[attrition_dat$Attrition == "No",]
+
+samp_yes <- sample(nrow(yes_dat), 0.8 * nrow(yes_dat))
+yes_train <- yes_dat[samp_yes, ]
+yes_test <- yes_dat[-samp_yes, ]
+
+samp_no <- sample(nrow(no_dat), 0.15 * nrow(no_dat))
+no_train <- no_dat[samp_no, ]
+no_test <- no_dat[-samp_no, ]
+
+balanced_train <- rbind(yes_train, no_train)
+balanced_test <- rbind(yes_test, no_test)
+yes_train
+no_train
+```
+
+```{r}
+samp <- sample(nrow(attrition_dat), 0.8 * nrow(attrition_dat))
+attrition_train <- attrition_dat[samp, ]
+attrition_test <- attrition_dat[-samp, ]
+```
+
+```{R}
+#adaboost requires response value in 0 and 1 form.
+attrition_train$Attrition <- ifelse(attrition_train$Attrition=="Yes",1,0)
+attrition_test$Attrition <- ifelse(attrition_test$Attrition=="Yes",1,0)
+
+#adaboost requires categorical features in factor form.
+attrition_train$Department<- factor(attrition_train$Department)
+attrition_train$EducationField<- factor(attrition_train$EducationField)
+attrition_train$MaritalStatus<- factor(attrition_train$MaritalStatus)
+
+attrition_test$Department<- factor(attrition_test$Department)
+attrition_test$EducationField<- factor(attrition_test$EducationField)
+attrition_test$MaritalStatus<- factor(attrition_test$MaritalStatus)
+```
+
+```{r}
+#This function returns the confution table and misclass probability of a and b 
+#as prediction and true value
+confusion <- function(a, b){
+  true_value <- a
+  prediction <- b
+  tbl <- table(true_value, prediction)
+  mis <- 1 - sum(diag(tbl))/sum(tbl)
+  mis_yes <- tbl[2] / (tbl[2]  + tbl[4])
+  mis_no <- tbl[3] / (tbl[1]  + tbl[3])
+  list(table = tbl, misclass.prob = mis, yesclassmis.prob = mis_yes,
+       noclassmis.prob = mis_no)
+}
+```
+
+
+First, we used all of the predictors we have as features of the adaboost model. We fitted the model with 500 trees(i.e. 500 iterations), 3 depths of interaction, 0.05 as our shrinkage. Also, we did a 5-fold cross validation on our model.
+
+```{r}
+set.seed(0)
+ada <- gbm(Attrition~., data = attrition_train, distribution = "adaboost", 
+           n.trees = 500, interaction.depth = 3, shrinkage = 0.05, cv.folds = 5)
+```
+
+
+```{r}
+train.pred=predict(ada, newdata = attrition_train, n.trees = 500, type = "response")
+train.pred <- ifelse(train.pred>0.5,1,0)
+confusion(attrition_train$Attrition, train.pred)
+```
+
+
+```{r}
+test.pred=predict(ada, newdata = attrition_test, n.trees = 500, type = "response")
+test.pred <- ifelse(test.pred>0.5,1,0)
+confusion(attrition_test$Attrition , test.pred)
+```
+According to the confusion table of the training set and test set, we can find that this adaboost model's overall performance is not bad, but it can't classify the sample points of the yes class very well. It has a misclassification probability of $0.6075$ and $0.8235$ on yes class of training set and test set respectively.
+
+
+
+```{R}
+#adaboost requires response value in 0 and 1 form.
+balanced_train$Attrition <- ifelse(balanced_train$Attrition=="Yes",1,0)
+balanced_test$Attrition <- ifelse(balanced_test$Attrition=="Yes",1,0)
+
+#adaboost requires categorical features in factor form.
+balanced_train$Department<- factor(balanced_train$Department)
+balanced_train$EducationField<- factor(balanced_train$EducationField)
+balanced_train$MaritalStatus<- factor(balanced_train$MaritalStatus)
+
+balanced_test$Department<- factor(balanced_test$Department)
+balanced_test$EducationField<- factor(balanced_test$EducationField)
+balanced_test$MaritalStatus<- factor(balanced_test$MaritalStatus)
+```
+
+```{r}
+set.seed(0)
+ada <- gbm(Attrition~., data = balanced_train, distribution = "adaboost", 
+           n.trees = 500, interaction.depth = 3, shrinkage = 0.05, cv.folds = 5)
+```
+
+
+```{r}
+train.pred=predict(ada, newdata = balanced_train, n.trees = 500, type = "response")
+train.pred <- ifelse(train.pred>0.5,1,0)
+confusion(balanced_train$Attrition, train.pred)
+```
+
+
+```{r}
+test.pred=predict(ada, newdata = balanced_test, n.trees = 500, type = "response")
+test.pred <- ifelse(test.pred>0.5,1,0)
+confusion(balanced_test$Attrition , test.pred)
+```
+
+Then we summarized our first adaboost model and plotted the importance of all the predictors. 
+
+
+```{r}
+summary(ada)
+```
+
+Here are plots of univariate partial dependence of the 2 most important features and 2 least important features according to the importance results.
+
+
+```{r}
+best.iter <- gbm.perf(ada, method = "cv")
+#2 most important
+plot(ada, i.var = c("Age","MonthlyIncome"), n.trees = best.iter, col.regions = viridis::cividis)
+
+#2 least importance
+plot(ada, i.var = "Department", n.trees = best.iter)
+plot(ada, i.var = "Education", n.trees = best.iter)
+```
+
+
+```{r}
+
+cv_5_fold_ada <- function(train, interaction.depth, shrinkage){
+  fold_size = floor(nrow(train)/5)
+  cv_error = rep(0,5)
+  for(i in 1:5){
+    if(i!=5){
+      CV_test_id = ((i-1)*fold_size+1):(i*fold_size)
+    }
+    else{
+      CV_test_id = ((i-1)*fold_size+1):nrow(train)
+    }
+    CV_train = train[-CV_test_id, ]
+    CV_test = train[CV_test_id, ]
+
+    ada <- gbm(Attrition~., data = CV_train, distribution = "adaboost", n.trees = 500,
+           interaction.depth = interaction.depth, shrinkage = shrinkage)
+    train.pred=predict(ada, newdata = CV_test, n.trees = 500, type = "response")
+    train.pred <- ifelse(train.pred>0.5,1,0)
+
+    cv_error[i] = confusion(CV_test$Attrition, train.pred)$misclass.prob
+  }
+  return(mean(cv_error))
+}
+
+```
+
+
+
+```{r}
+set.seed(0)
+
+interaction_list = c(1, 2, 3, 4, 5)
+shrinkage_list = c(0.001, 0.005, 0.01, 0.05, 0.1)
+temp = matrix(data=NA,nrow = 5,ncol = 5)
+
+CV_error = data.frame(temp, row.names = interaction_list)
+colnames(CV_error)=shrinkage_list
+
+for(i in 1:5){
+  for(j in 1:5){
+    CV_error[i,j] = cv_5_fold_ada(balanced_train, interaction_list[i], shrinkage_list[j])
+  }
+}
+```
+
+
+```{r}
+CV_error
+```
+According to the CV_error, adaboost model with n.trees = 500, interaction.depth = 1, shrinkage = 0.05 has the lowest CV error. Next we train the model with cv.folds = 5 to find the best n.trees for this model.
+
+```{r}
+set.seed(0)
+ada <- gbm(Attrition~., data = balanced_train, distribution = "adaboost", 
+           n.trees = 10000, interaction.depth = 1, shrinkage = 0.001, cv.folds = 5)
+```
+
+
+```{r}
+best.iter <- gbm.perf(ada, method = "cv")
+print(best.iter)
+```
+
+The best n.trees for this model is 271 and we show the results of this model as follow.
+
+```{r}
+set.seed(0)
+ada <- gbm(Attrition~., data = balanced_train, distribution = "adaboost", 
+           n.trees = 7431, interaction.depth = 1, shrinkage = 0.001, cv.folds = 5)
+
+train.pred=predict(ada, newdata = balanced_train, n.trees = 7431, type = "response")
+train.pred <- ifelse(train.pred>0.5,1,0)
+confusion(balanced_train$Attrition, train.pred)
+
+test.pred=predict(ada, newdata = balanced_test, n.trees = 7431, type = "response")
+test.pred <- ifelse(test.pred>0.5,1,0)
+confusion(balanced_test$Attrition, test.pred)
+```
